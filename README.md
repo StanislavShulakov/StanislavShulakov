@@ -52,8 +52,8 @@
 
 <p>Как решал: <p>
 
-> <a href="https://github.com/Skyproportfolio/data-analytics-5month/blob/main/Проект%205.xlsx">Ссылка на проект</a>
-(ссылка должна содержать демонстративные материалы: скриншоты, таблички, запросы, код. Работодатель должен иметь возможность быстро посмотреть результаты работы)
+> <a href="https://github.com/StanislavShulakov/StanislavShulakov/tree/main/%D0%9F%D1%80%D0%BE%D0%B5%D0%BA%D1%82%202">Ссылка на проект</a>
+
  
  <p>Выводы (итоги):<p>
 <ol>
