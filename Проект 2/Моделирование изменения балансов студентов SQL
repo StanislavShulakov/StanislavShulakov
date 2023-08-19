@@ -1,1 +1,105 @@
+```
+with first_payments as  -- Первая дата успешной(со статусом "success") транзакции из таблицы "payments" для каждого студента   
+ (select user_id
+       , min (date (transaction_datetime)) as first_payment_date -- Дата первой успешной транзакции
+  from skyeng_db.payments
+  where status_name = 'success'
+  group by user_id
+ ),
 
+
+all_dates as  -- уникальные даты (без времени) уроков, таблица, которая хранит все дни 2016 года             
+  (select distinct date (class_start_datetime) as dt
+   from skyeng_db.classes
+   where class_start_datetime between '2016-01-01 00:00' and '2016-12-31 23:59'
+  ), 
+
+
+all_dates_by_user as  --даты жизни студента после того, как произошла его первая транзакция    
+  (select  user_id 
+         , dt 
+   from all_dates as a_d
+   join first_payments as f_p 
+    on  a_d.dt >= f_p. first_payment_date
+   order by user_id
+           ,dt
+  ), 
+
+
+payments_by_dates as -- сколько уроков было начислено или списано в этот день      
+   (select user_id
+         , date (transaction_datetime) as payment_date
+         , sum (classes) as transaction_balance_change
+    from skyeng_db.payments
+    where status_name = 'success'
+    group by user_id
+           , payment_date
+    ),
+
+
+payments_by_dates_cumsum as -- кумулятивная сумма по transaction_balance_change
+    (select a_d_b_u. user_id 
+          , dt
+          , coalesce (transaction_balance_change, 0) as transaction_balance_change
+          , sum (coalesce (transaction_balance_change, 0)) over (partition by a_d_b_u.user_id order by dt) as transaction_balance_change_cs 
+    from all_dates_by_user as a_d_b_u
+    left join payments_by_dates as p_b_d 
+           on a_d_b_u. user_id = p_b_d. user_id
+          and dt = payment_date
+     ),
+
+
+classes_by_dates as -- количество пройденных в этот день уроков       
+     (select user_id
+           , date (class_start_datetime) as class_date
+           , count (user_id)*-1 as classes   --- ??????
+      from skyeng_db.classes
+      where  class_status in ('success', 'failed_by_student')
+        and  class_type != 'trial'
+      group by user_id
+             , class_date
+       order by user_id
+              , class_date
+      ),
+      
+
+classes_by_dates_dates_cumsum as  -- кумулятивная сумма по classes
+      (select a_d_b_u. user_id
+            , dt
+            , coalesce (classes, 0) as classes
+            , sum (coalesce (classes, 0)) over (partition by a_d_b_u. user_id order by dt) as classes_cs
+       from all_dates_by_user as a_d_b_u 
+       left join classes_by_dates as c_b_d
+              on a_d_b_u. user_id = c_b_d. user_id
+             and dt = class_date
+       order by a_d_b_u. user_id
+      ),
+      
+
+balances as  -- баланс каждого студента             
+    (select p_b_d_c. user_id
+          , p_b_d_c. dt
+          , transaction_balance_change
+          , transaction_balance_change_cs
+          , classes
+          , classes_cs
+          , classes_cs+transaction_balance_change_cs as balance
+     from payments_by_dates_cumsum as p_b_d_c
+     join classes_by_dates_dates_cumsum as c_b_d_d_c 
+       on p_b_d_c. dt = c_b_d_d_c. dt
+      and p_b_d_c. user_id = c_b_d_d_c. user_id
+     order by p_b_d_c. user_id)
+          
+
+select dt as date -- Итоговая таблица с общим количеством уроков на балансах студентов
+     , sum (transaction_balance_change) as transaction_balance
+     , sum (transaction_balance_change_cs) as transaction_balance_change_cs
+     , sum (classes) as classes
+     , sum (classes_cs) as classes_cs
+     , sum (balance) as balance
+from balances
+group by dt
+order by dt 
+
+
+```
